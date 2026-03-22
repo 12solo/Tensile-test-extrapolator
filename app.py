@@ -96,11 +96,20 @@ if uploaded_file is not None:
             else:
                 youngs_modulus = 0.0 
             
-            # --- YIELD POINT ---
+          # --- IMPROVED YIELD POINT CALCULATION ---
             yield_stress, yield_strain = 0.0, 0.0
             if calc_yield:
+                # 1. Focus only on the early part of the test
                 yield_mask = df_combined['Strain (%)'] <= yield_search_max
-                yield_idx = df_combined.loc[yield_mask, 'Stress (MPa)'].idxmax()
+                search_df = df_combined.loc[yield_mask]
+                
+                # 2. Use a rolling average to smooth noise before finding the peak
+                # This prevents the app from picking a "noise spike" as the yield point
+                smoothed_stress = search_df['Stress (MPa)'].rolling(window=5, center=True).mean()
+                
+                # 3. Find the first local maximum (the "knee")
+                yield_idx = smoothed_stress.idxmax()
+                
                 yield_stress = df_combined.loc[yield_idx, 'Stress (MPa)']
                 yield_strain = df_combined.loc[yield_idx, 'Strain (%)']
 
