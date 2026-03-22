@@ -165,7 +165,9 @@ if uploaded_file is not None:
             ax.indicate_inset_zoom(axins, edgecolor="black")
             
             st.pyplot(fig)
-            
+            # --- RAW DATA TABLE ---
+        st.subheader("📋 Data Preview Table")
+        st.dataframe(df_combined[['Strain (%)', 'Stress (MPa)', 'Force (N)', 'Deformation (mm)', 'Type']], height=400)
             # --- EXPORT ---
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
