@@ -4,12 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 import io
 
-st.set_page_config(page_title="Tensile Data Extrapolator", layout="wide")
+st.set_page_config(page_title="Tensile Suite", layout="wide")
 
-# --- Developer Credit ---
-st.title("📈 Tensile Test Extrapolator")
+# --- Developer Credit & Instructions ---
+st.title("📈 Tensile Suite v1.7")
 st.markdown("**Developed by Solomon** 🚀")
 st.markdown("Upload your test data, set the parameters, calculate mechanical properties, and download the dataset.")
+st.info("💡 **Quick Tip:** Use the 'Apply Plateau Noise' toggle in the sidebar to switch between a realistic (noisy) or theoretical (smooth) extrapolation line.")
 
 # --- Sidebar for parameters ---
 st.sidebar.header("⚙️ Extrapolation Parameters")
@@ -21,155 +22,109 @@ gauge_length = st.sidebar.number_input("Initial Gauge Length (mm)", value=50.0, 
 ym_start = st.sidebar.number_input("Modulus Start Elongation (%)", value=0.2, step=0.1)
 ym_end = st.sidebar.number_input("Modulus End Elongation (%)", value=1.0, step=0.1)
 
-# --- Yield Point Setup ---
 st.sidebar.header("🎯 Yield Point Setup")
 calc_yield = st.sidebar.checkbox("Calculate Yield Point", value=True)
-yield_search_max = st.sidebar.number_input("Max Strain to Search for Yield (%)", value=25.0, step=5.0)
+yield_search_max = st.sidebar.number_input("Max Strain to Search (%)", value=25.0, step=5.0)
 
-# --- Zoom Box Controls ---
 st.sidebar.header("🔍 Zoom Graph Position")
-st.sidebar.markdown("Move the box to avoid overlapping the curve.")
-inset_x = st.sidebar.slider("Horizontal Position (X)", min_value=0.0, max_value=0.8, value=0.55, step=0.05)
-inset_y = st.sidebar.slider("Vertical Position (Y)", min_value=0.0, max_value=0.8, value=0.05, step=0.05)
-inset_w = st.sidebar.slider("Box Width", min_value=0.2, max_value=0.6, value=0.40, step=0.05)
-inset_h = st.sidebar.slider("Box Height", min_value=0.2, max_value=0.6, value=0.40, step=0.05)
+inset_x = st.sidebar.slider("Horizontal (X)", 0.0, 0.8, 0.55, 0.05)
+inset_y = st.sidebar.slider("Vertical (Y)", 0.0, 0.8, 0.05, 0.05)
+inset_w = st.sidebar.slider("Width", 0.2, 0.6, 0.4, 0.05)
+inset_h = st.sidebar.slider("Height", 0.2, 0.6, 0.4, 0.05)
 
 st.sidebar.header("🎛️ Advanced Settings")
-noise_std = st.sidebar.number_input("Noise Standard Deviation (N)", value=0.1, step=0.05)
-ref_points = st.sidebar.number_input("Points for Reference Trend (Slope)", value=50, step=5)
+apply_noise = st.sidebar.checkbox("Apply Plateau Noise", value=True)
+noise_std = st.sidebar.number_input("Noise Std Dev (N)", value=0.1, step=0.05)
+ref_points = st.sidebar.number_input("Slope Ref Points", value=50, step=5)
 
-# --- File uploader ---
-uploaded_file = st.file_uploader("Upload Tensile Test Data (Excel or CSV)", type=['csv', 'xlsx', 'xls'])
+# --- File Uploader ---
+uploaded_file = st.file_uploader("Upload Tensile Data (Excel or CSV)", type=['csv', 'xlsx', 'xls'])
 
 if uploaded_file is not None:
-    if uploaded_file.name.endswith('.csv'):
-        df = pd.read_csv(uploaded_file)
-    else:
-        df = pd.read_excel(uploaded_file)
-    
-    st.subheader("1. Column Selection")
+    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
     cols = df.columns.tolist()
     
-    col1, col2 = st.columns(2)
-    with col1:
-        force_col = st.selectbox("Select Force Column (N)", cols, index=0)
-    with col2:
-        def_col = st.selectbox("Select Deformation Column (mm)", cols, index=1 if len(cols)>1 else 0)
+    c_a, c_b = st.columns(2)
+    with c_a: force_col = st.selectbox("Force Column (N)", cols, index=0)
+    with c_b: def_col = st.selectbox("Deformation Column (mm)", cols, index=1 if len(cols)>1 else 0)
 
     st.subheader("2. Results & Extrapolation")
     
-    if st.button("Calculate & Generate Extrapolation"):
+    if st.button("Calculate & Generate Analysis"):
+        # --- CORE EXTRAPOLATION LOGIC ---
         last_n = df.tail(ref_points)
-        x_last = last_n[def_col].values
-        y_last = last_n[force_col].values
-        
-        slope, intercept = np.polyfit(x_last, y_last, 1)
-        
-        D_stop = df[def_col].iloc[-1]
-        L_stop = df[force_col].iloc[-1]
-        
+        slope, intercept = np.polyfit(last_n[def_col].values, last_n[force_col].values, 1)
+        D_stop, L_stop = df[def_col].iloc[-1], df[force_col].iloc[-1]
         avg_step = np.mean(np.diff(df[def_col].tail(10).values))
         
-        if target_def > D_stop:
-            D_new = np.arange(D_stop + avg_step, target_def + avg_step, avg_step)
-            if D_new[-1] > target_def:
-                D_new[-1] = target_def
+        D_new = np.arange(D_stop + avg_step, target_def + avg_step, avg_step)
+        if D_new[-1] > target_def: D_new[-1] = target_def
+        
+        np.random.seed(42)
+        noise = np.random.normal(0, noise_std, len(D_new)) if apply_noise else 0
             
-            np.random.seed(42) 
-            L_new = L_stop + slope * (D_new - D_stop) + np.random.normal(0, noise_std, len(D_new))
-            
-            df_ext = pd.DataFrame({'Force (N)': L_new, 'Deformation (mm)': D_new})
-            df_orig = pd.DataFrame({'Force (N)': df[force_col], 'Deformation (mm)': df[def_col]})
-            df_combined = pd.concat([df_orig, df_ext], ignore_index=True)
-            
-            df_combined['Stress (MPa)'] = df_combined['Force (N)'] / area
-            df_combined['Strain (mm/mm)'] = df_combined['Deformation (mm)'] / gauge_length
-            df_combined['Strain (%)'] = df_combined['Strain (mm/mm)'] * 100
-            
-            # --- MODULUS CALCULATION ---
-            mask = (df_combined['Strain (%)'] >= ym_start) & (df_combined['Strain (%)'] <= ym_end)
-            x_ym = df_combined.loc[mask, 'Strain (mm/mm)'].values
-            y_ym = df_combined.loc[mask, 'Stress (MPa)'].values
-            
-            if len(x_ym) > 1:
-                youngs_modulus, intercept_ym = np.polyfit(x_ym, y_ym, 1)
-            else:
-                youngs_modulus = 0.0 
-            
-          # --- IMPROVED YIELD POINT CALCULATION ---
-            yield_stress, yield_strain = 0.0, 0.0
-            if calc_yield:
-                # 1. Focus only on the early part of the test
-                yield_mask = df_combined['Strain (%)'] <= yield_search_max
-                search_df = df_combined.loc[yield_mask]
-                
-                # 2. Use a rolling average to smooth noise before finding the peak
-                # This prevents the app from picking a "noise spike" as the yield point
-                smoothed_stress = search_df['Stress (MPa)'].rolling(window=5, center=True).mean()
-                
-                # 3. Find the first local maximum (the "knee")
-                yield_idx = smoothed_stress.idxmax()
-                
-                yield_stress = df_combined.loc[yield_idx, 'Stress (MPa)']
-                yield_strain = df_combined.loc[yield_idx, 'Strain (%)']
+        L_new = L_stop + slope * (D_new - D_stop) + noise
+        
+        df_orig = pd.DataFrame({'Force (N)': df[force_col], 'Deformation (mm)': df[def_col], 'Type': 'Original'})
+        df_ext = pd.DataFrame({'Force (N)': L_new, 'Deformation (mm)': D_new, 'Type': 'Extrapolated'})
+        df_combined = pd.concat([df_orig, df_ext], ignore_index=True)
+        df_combined['Stress (MPa)'] = df_combined['Force (N)'] / area
+        df_combined['Strain (%)'] = (df_combined['Deformation (mm)'] / gauge_length) * 100
+        
+        # Modulus Fit
+        mask_ym = (df_combined['Strain (%)'] >= ym_start) & (df_combined['Strain (%)'] <= ym_end)
+        E, inter_ym = np.polyfit(df_combined.loc[mask_ym, 'Deformation (mm)']/gauge_length, df_combined.loc[mask_ym, 'Stress (MPa)'], 1)
+        
+        # Yield Point
+        y_mask = df_combined['Strain (%)'] <= yield_search_max
+        y_idx = df_combined.loc[y_mask, 'Stress (MPa)'].idxmax()
+        y_stress, y_strain = df_combined.loc[y_idx, 'Stress (MPa)'], df_combined.loc[y_idx, 'Strain (%)']
 
-            # --- BREAK PROPERTIES ---
-            elong_break = df_combined['Strain (%)'].iloc[-1]
-            stress_break = df_combined['Stress (MPa)'].iloc[-1]
-            
-            # Handle trapz/trapezoid for different NumPy versions
-            try:
-                work_j = np.trapezoid(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
-            except AttributeError:
-                work_j = np.trapz(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
-            
-            # --- DASHBOARD ---
-            st.success("Calculations Complete!")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Young's Modulus", f"{youngs_modulus:.2f} MPa")
-            c2.metric("Yield Stress", f"{yield_stress:.2f} MPa")
-            c3.metric("Elongation @ Yield", f"{yield_strain:.2f} %")
-            
-            c4, c5, c6 = st.columns(3)
-            c4.metric("Stress @ Break", f"{stress_break:.2f} MPa")
-            c5.metric("Elongation @ Break", f"{elong_break:.2f} %")
-            c6.metric("Work Done", f"{work_j:.2f} J")
-            
-            # --- PLOTTING ---
-            fig, ax = plt.subplots(figsize=(10, 6))
-            ax.plot(df_combined['Strain (%)'].iloc[:len(df_orig)], df_combined['Stress (MPa)'].iloc[:len(df_orig)], label='Original Data', color='blue')
-            ax.plot(df_combined['Strain (%)'].iloc[len(df_orig)-1:], df_combined['Stress (MPa)'].iloc[len(df_orig)-1:], label='Extrapolation', color='red', alpha=0.7)
-            
-            if len(x_ym) > 1:
-                xfv = np.linspace(0, ym_end/100 * 1.5, 50)
-                yfv = youngs_modulus * xfv + intercept_ym
-                ax.plot(xfv * 100, yfv, color='green', linestyle='--', label='Elastic Fit')
-            
-            if calc_yield:
-                ax.plot(yield_strain, yield_stress, 'o', color='orange', label='Yield Point')
+        # Energy (Work Done)
+        try: work_j = np.trapezoid(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
+        except: work_j = np.trapz(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
 
-            ax.set_xlabel('Strain (%)')
-            ax.set_ylabel('Stress (MPa)')
-            ax.legend(loc='lower right')
-            ax.grid(True, alpha=0.3)
-            
-            # Inset
-            axins = ax.inset_axes([inset_x, inset_y, inset_w, inset_h])
-            axins.plot(df_combined['Strain (%)'].iloc[:len(df_orig)], df_combined['Stress (MPa)'].iloc[:len(df_orig)], color='blue')
-            if len(x_ym) > 1:
-                axins.plot(xfv * 100, yfv, color='green', linestyle='--')
-            
-            z_max = max(ym_end + 1.0, yield_strain + 1.0 if calc_yield else 0)
-            axins.set_xlim(0, z_max)
-            axins.set_ylim(0, df_combined.loc[df_combined['Strain (%)'] <= z_max, 'Stress (MPa)'].max() * 1.2)
-            ax.indicate_inset_zoom(axins, edgecolor="black")
-            
-            st.pyplot(fig)
-           
-            # --- EXPORT ---
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_combined.to_excel(writer, index=False)
-            st.download_button("📥 Download Excel", output.getvalue(), "Extended_Data_Solomon.xlsx")
-        else:
-            st.error("Target deformation must be higher than sample stop point.")
+        # --- DASHBOARD METRICS ---
+        st.success("Calculations Complete!")
+        m1, m2, m3, m4, m5, m6 = st.columns(6)
+        m1.metric("Modulus (E)", f"{E:.1f} MPa")
+        m2.metric("Yield Stress", f"{y_stress:.2f} MPa")
+        m3.metric("Yield Strain", f"{y_strain:.2f} %")
+        m4.metric("Stress @ Break", f"{df_combined['Stress (MPa)'].iloc[-1]:.2f} MPa")
+        m5.metric("Strain @ Break", f"{df_combined['Strain (%)'].iloc[-1]:.1f} %")
+        m6.metric("Work Done", f"{work_j:.2f} J")
+
+        # --- PLOTTING ---
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.plot(df_combined.loc[df_combined['Type']=='Original', 'Strain (%)'], df_combined.loc[df_combined['Type']=='Original', 'Stress (MPa)'], label='Original Data', color='blue', lw=2)
+        ax.plot(df_combined.loc[df_combined['Type']=='Extrapolated', 'Strain (%)'], df_combined.loc[df_combined['Type']=='Extrapolated', 'Stress (MPa)'], label='Extrapolated Data', color='red', ls='--', alpha=0.7)
+        
+        xfv = np.linspace(0, ym_end/100 * 1.5, 50)
+        yfv = E * xfv + inter_ym
+        ax.plot(xfv * 100, yfv, color='green', ls=':', label='Elastic Fit')
+        
+        if calc_yield: ax.plot(y_strain, y_stress, 'o', color='orange', label='Yield Point')
+        
+        ax.set_xlabel('Strain (%)'); ax.set_ylabel('Stress (MPa)'); ax.legend(loc='lower right'); ax.grid(True, alpha=0.3)
+
+        # Inset Zoom
+        axins = ax.inset_axes([inset_x, inset_y, inset_w, inset_h])
+        axins.plot(df_combined['Strain (%)'].iloc[:len(df_orig)], df_combined['Stress (MPa)'].iloc[:len(df_orig)], color='blue')
+        axins.plot(xfv * 100, yfv, color='green', ls=':')
+        if calc_yield: axins.plot(y_strain, y_stress, 'o', color='orange')
+        
+        z_lim = max(ym_end + 1.5, y_strain + 1.5 if calc_yield else 0)
+        axins.set_xlim(0, z_lim)
+        axins.set_ylim(0, df_combined.loc[df_combined['Strain (%)'] <= z_lim, 'Stress (MPa)'].max() * 1.3)
+        ax.indicate_inset_zoom(axins, edgecolor="black")
+        st.pyplot(fig)
+
+        # --- RAW DATA TABLE ---
+        st.subheader("📋 Data Preview Table")
+        st.dataframe(df_combined[['Strain (%)', 'Stress (MPa)', 'Force (N)', 'Deformation (mm)', 'Type']], height=400)
+
+        # Export
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_combined.to_excel(writer, index=False)
+        st.download_button("📥 Download Report", output.getvalue(), "Solomon_Tensile_Report.xlsx")
