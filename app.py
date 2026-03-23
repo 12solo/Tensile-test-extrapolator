@@ -13,7 +13,7 @@ col_logo, col_text = st.columns([1, 3])
 
 with col_logo:
     try:
-        st.image(logo_url, width=250)
+        st.image(logo_url, width=300)
     except:
         # If the image fails to load, show a placeholder icon
         st.header("🔬")
