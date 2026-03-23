@@ -7,7 +7,7 @@ import io
 st.set_page_config(page_title="Tensile Suite", layout="wide")
 # --- 2. Professional Header & Logo ---
 # This pulls your logo directly from your Google Drive link
-logo_url = "https://drive.google.com/uc?id=1h8s8d1GD6VLfkW697mu8FfBadi1okbFv"
+logo_url = "https://drive.google.com/file/d/1h8s8d1GD6VLfkW697mu8FfBadi1okbFv/view?usp=sharing"
 
 col_logo, col_text = st.columns([1, 5])
 
