@@ -5,10 +5,14 @@ import matplotlib.pyplot as plt
 import io
 
 st.set_page_config(page_title="Tensile Suite", layout="wide")
---- DISPLAY LOGO ---
-# Paste the public URL of your generated image here
-logo_url = "https://drive.google.com/file/d/1h8s8d1GD6VLfkW697mu8FfBadi1okbFv/view?usp=sharing" 
-st.image(logo_url, width=150) # Adjust width as needed
+# --- 2. Professional Header & Logo ---
+# Integrating your logo from Google Drive
+logo_path = "https://drive.google.com/uc?id=1h8s8d1GD6VLfkW697mu8FfBadi1okbFv"
+
+col_logo, col_text = st.columns([1, 4])
+with col_logo:
+    st.image(logo_path, width=150)
+with col_text:
 # --- Developer Credit & Instructions ---
 st.title("📈 Tensile Suite v1.7")
 st.markdown("**Developed by Solomon** 🚀")
