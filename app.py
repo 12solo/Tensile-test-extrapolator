@@ -7,7 +7,7 @@ import io
 st.set_page_config(page_title="Tensile Suite", layout="wide")
 --- DISPLAY LOGO ---
 # Paste the public URL of your generated image here
-logo_url = "https://gemini.google.com/share/d2cc9dd8c7e4" 
+logo_url = "https://drive.google.com/file/d/1h8s8d1GD6VLfkW697mu8FfBadi1okbFv/view?usp=sharing" 
 st.image(logo_url, width=150) # Adjust width as needed
 # --- Developer Credit & Instructions ---
 st.title("📈 Tensile Suite v1.7")
