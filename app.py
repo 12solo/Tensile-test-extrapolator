@@ -6,13 +6,17 @@ import io
 
 st.set_page_config(page_title="Tensile Suite", layout="wide")
 # --- 2. Professional Header & Logo ---
-# Integrating your logo from Google Drive
-logo_path = "https://drive.google.com/uc?id=1h8s8d1GD6VLfkW697mu8FfBadi1okbFv"
+# This pulls your logo directly from your Google Drive link
+logo_url = "https://drive.google.com/uc?id=1h8s8d1GD6VLfkW697mu8FfBadi1okbFv"
 
-col_logo, col_text = st.columns([1, 4])
+col_logo, col_text = st.columns([1, 5])
+
 with col_logo:
-    st.image(logo_path, width=150)
+    st.image(logo_url, width=120)
+
 with col_text:
+    st.title("📈 Solomon Tensile Suite v1.8")
+    st.markdown("**Developed by Solomon** 🚀")
 # --- Developer Credit & Instructions ---
 st.title("📈 Tensile Suite v1.7")
 st.markdown("**Developed by Solomon** 🚀")
