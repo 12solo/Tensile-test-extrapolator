@@ -13,10 +13,6 @@ col_logo, col_text = st.columns([1, 5])
 
 with col_logo:
     st.image(logo_url, width=120)
-
-with col_text:
-    st.title("📈 Solomon Tensile Suite v1.8")
-    st.markdown("**Developed by Solomon** 🚀")
 # --- Developer Credit & Instructions ---
 st.title("📈 Tensile Suite v1.7")
 st.markdown("**Developed by Solomon** 🚀")
