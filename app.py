@@ -9,11 +9,11 @@ st.set_page_config(page_title="Tensile Suite", layout="wide")
 # Using your GitHub Raw link for maximum reliability
 logo_url = "https://raw.githubusercontent.com/12solo/Tensile-test-extrapolator/main/logo%20s.png"
 
-col_logo, col_text = st.columns([1, 5])
+col_logo, col_text = st.columns([1, 3])
 
 with col_logo:
     try:
-        st.image(logo_url, width=120)
+        st.image(logo_url, width=250)
     except:
         # If the image fails to load, show a placeholder icon
         st.header("🔬")
