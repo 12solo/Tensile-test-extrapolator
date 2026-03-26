@@ -37,13 +37,13 @@ target_def = st.sidebar.number_input("Target Final Deformation (mm)", value=395.
 area = st.sidebar.number_input("Cross-sectional Area (mm²)", value=16.0, step=0.5)
 
 st.sidebar.header("📏 Material Properties Setup")
-gauge_length = st.sidebar.number_input("Initial Gauge Length (mm)", value=25.0, step=1.0)
+gauge_length = st.sidebar.number_input("Initial Gauge Length (mm)", value=50.0, step=1.0)
 ym_start = st.sidebar.number_input("Modulus Start Elongation (%)", value=0.2, step=0.1)
 ym_end = st.sidebar.number_input("Modulus End Elongation (%)", value=1.0, step=0.1)
 
 st.sidebar.header("🎯 Yield Point Setup")
 calc_yield = st.sidebar.checkbox("Calculate Yield Point", value=True)
-yield_search_max = st.sidebar.number_input("Max Strain to Search (%)", value=30.0, step=5.0)
+yield_search_max = st.sidebar.number_input("Max Strain to Search (%)", value=25.0, step=5.0)
 
 st.sidebar.header("🔍 Zoom Graph Position")
 inset_x = st.sidebar.slider("Horizontal (X)", 0.0, 0.8, 0.55, 0.05)
@@ -144,6 +144,32 @@ if uploaded_file is not None:
         fig.savefig(img_data, format='png', dpi=100)
         img_data.seek(0)
 
+        # Capture Logo
+        logo_data = io.BytesIO()
+        try:
+            r = requests.get(logo_url)
+            logo_data.write(r.content); logo_data.seek(0)
+            has_logo = True
+        except: has_logo = False
+
+        output = io.BytesIO()
+        try:
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_combined.to_excel(writer, index=False, sheet_name="Full Dataset")
+                workbook  = writer.book
+                worksheet = workbook.add_worksheet("Summary Report")
+                writer.sheets["Summary Report"] = worksheet
+                
+                # Branding
+                if has_logo:
+                    worksheet.insert_image('B1', 'logo.png', {'image_data': logo_data, 'x_scale': 0.1, 'y_scale': 0.1})
+                
+                header_fmt = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
+                worksheet.merge_range('B5:D5', 'Mechanical Analysis Summary', header_fmt)
+                
+                # Write Summary starting Row 6
+                df_summary.to_excel(writer, index=False, sheet_name="Summary Report", startrow=5, startcol=1)
+                
                 # Insert Plot
                 worksheet.insert_image('F6', 'plot.png', {'image_data': img_data, 'x_scale': 0.8, 'y_scale': 0.8})
 
