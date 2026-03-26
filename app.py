@@ -162,7 +162,7 @@ if uploaded_file is not None:
                 
                 # Branding
                 if has_logo:
-                    worksheet.insert_image('B1', 'logo.png', {'image_data': logo_data, 'x_scale': 0.1, 'y_scale': 0.1})
+                    worksheet.insert_image('B1', 'logo.png', {'image_data': logo_data, 'x_scale': 0.05, 'y_scale': 0.05})
                 
                 header_fmt = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
                 worksheet.merge_range('B5:D5', 'Mechanical Analysis Summary', header_fmt)
