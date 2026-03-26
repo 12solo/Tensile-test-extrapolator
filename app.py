@@ -130,12 +130,41 @@ if uploaded_file is not None:
         ax.indicate_inset_zoom(axins, edgecolor="black")
         st.pyplot(fig)
 
-        # --- RAW DATA TABLE ---
-        st.subheader("📋 Data Preview Table")
-        st.dataframe(df_combined[['Strain (%)', 'Stress (MPa)', 'Force (N)', 'Deformation (mm)', 'Type']], height=400)
+        # --- Export Section (Updated to include Metrics) ---
+        # 1. Create a Summary DataFrame for the metrics
+        summary_data = {
+            "Property": [
+                "Young's Modulus (E)", 
+                "Yield Stress", 
+                "Yield Strain", 
+                "Stress @ Break", 
+                "Strain @ Break", 
+                "Work Done (Toughness)"
+            ],
+            "Value": [
+                f"{E:.2f}", 
+                f"{y_stress:.2f}", 
+                f"{y_strain:.2f}", 
+                f"{df_combined['Stress (MPa)'].iloc[-1]:.2f}", 
+                f"{df_combined['Strain (%)'].iloc[-1]:.2f}", 
+                f"{work_j:.4f}"
+            ],
+            "Unit": ["MPa", "MPa", "%", "MPa", "%", "J"]
+        }
+        df_summary = pd.DataFrame(summary_data)
 
-        # Export
+        # 2. Write both DataFrames to one Excel file with two sheets
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_combined.to_excel(writer, index=False)
-        st.download_button("📥 Download Report", output.getvalue(), "Solomon_Tensile_Report.xlsx")
+            # Sheet 1: The Raw and Extrapolated Data
+            df_combined.to_excel(writer, index=False, sheet_name="Full Dataset")
+            # Sheet 2: The Dashboard Metrics
+            df_summary.to_excel(writer, index=False, sheet_name="Mechanical Properties")
+        
+        st.download_button(
+            label="📥 Download Report", 
+            data=output.getvalue(), 
+            file_name="Solomon_Tensile_Report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
