@@ -23,8 +23,9 @@ with col_text:
     st.markdown("**Developed by Solomon** 🚀")
 
 st.info("""
-The Solomon Tensile Suite is a specialized tool designed for Material Scientists and Mechanical Engineers 
-to analyze tensile test data, specifically optimized for polymers and bioplastics (PBAT, PBAT/PLA).
+The Solomon Tensile Suite is a high-fidelity analytical framework engineered for Material Scientists and Mechanical Engineers. 
+While optimized for biodegradable polymers—specifically PBAT and PBAT/PLA blends—it provides a robust solution for the "premature termination" problem common in high-elongation testing. 
+By utilizing advanced linear extrapolation of the drawing plateau, the suite bridges the gap between empirical laboratory data and theoretical failure points, ensuring a comprehensive characterization of mechanical performance
 """)
 
 # --- 3. Sidebar Parameters ---
