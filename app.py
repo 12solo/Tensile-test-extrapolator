@@ -29,7 +29,7 @@ to analyze tensile test data, specifically optimized for polymers and bioplastic
 
 # --- 3. Sidebar Parameters ---
 st.sidebar.header("📂 Project Metadata")
-project_name = st.sidebar.text_input("Project Name / Research Topic", "PBAT Extrapolation Study")
+project_name = st.sidebar.text_input("Project Name / Research Topic", "PBAT/PLA;PBS;PET")
 batch_id = st.sidebar.text_input("Batch ID / Sample Name", "Batch-001")
 
 st.sidebar.header("⚙️ Extrapolation Parameters")
