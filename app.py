@@ -37,13 +37,13 @@ target_def = st.sidebar.number_input("Target Final Deformation (mm)", value=395.
 area = st.sidebar.number_input("Cross-sectional Area (mm²)", value=16.0, step=0.5)
 
 st.sidebar.header("📏 Material Properties Setup")
-gauge_length = st.sidebar.number_input("Initial Gauge Length (mm)", value=50.0, step=1.0)
+gauge_length = st.sidebar.number_input("Initial Gauge Length (mm)", value=25.0, step=1.0)
 ym_start = st.sidebar.number_input("Modulus Start Elongation (%)", value=0.2, step=0.1)
 ym_end = st.sidebar.number_input("Modulus End Elongation (%)", value=1.0, step=0.1)
 
 st.sidebar.header("🎯 Yield Point Setup")
 calc_yield = st.sidebar.checkbox("Calculate Yield Point", value=True)
-yield_search_max = st.sidebar.number_input("Max Strain to Search (%)", value=25.0, step=5.0)
+yield_search_max = st.sidebar.number_input("Max Strain to Search (%)", value=35.0, step=5.0)
 
 st.sidebar.header("🔍 Zoom Graph Position")
 inset_x = st.sidebar.slider("Horizontal (X)", 0.0, 0.8, 0.55, 0.05)
