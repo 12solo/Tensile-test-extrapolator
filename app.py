@@ -144,32 +144,6 @@ if uploaded_file is not None:
         fig.savefig(img_data, format='png', dpi=100)
         img_data.seek(0)
 
-        # Capture Logo
-        logo_data = io.BytesIO()
-        try:
-            r = requests.get(logo_url)
-            logo_data.write(r.content); logo_data.seek(0)
-            has_logo = True
-        except: has_logo = False
-
-        output = io.BytesIO()
-        try:
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_combined.to_excel(writer, index=False, sheet_name="Full Dataset")
-                workbook  = writer.book
-                worksheet = workbook.add_worksheet("Summary Report")
-                writer.sheets["Summary Report"] = worksheet
-                
-                # Branding
-                if has_logo:
-                    worksheet.insert_image('B1', 'logo.png', {'image_data': logo_data, 'x_scale': 0.4, 'y_scale': 0.4})
-                
-                header_fmt = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
-                worksheet.merge_range('B5:D5', 'Mechanical Analysis Summary', header_fmt)
-                
-                # Write Summary starting Row 6
-                df_summary.to_excel(writer, index=False, sheet_name="Summary Report", startrow=5, startcol=1)
-                
                 # Insert Plot
                 worksheet.insert_image('F6', 'plot.png', {'image_data': img_data, 'x_scale': 0.8, 'y_scale': 0.8})
 
