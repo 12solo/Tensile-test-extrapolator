@@ -130,41 +130,39 @@ if uploaded_file is not None:
         ax.indicate_inset_zoom(axins, edgecolor="black")
         st.pyplot(fig)
 
-        # --- Export Section (Updated to include Metrics) ---
-        # 1. Create a Summary DataFrame for the metrics
+        # --- Advanced Export Section (Data + Metrics + Graph) ---
+        # 1. Prepare Metrics Data
         summary_data = {
-            "Property": [
-                "Young's Modulus (E)", 
-                "Yield Stress", 
-                "Yield Strain", 
-                "Stress @ Break", 
-                "Strain @ Break", 
-                "Work Done (Toughness)"
-            ],
-            "Value": [
-                f"{E:.2f}", 
-                f"{y_stress:.2f}", 
-                f"{y_strain:.2f}", 
-                f"{df_combined['Stress (MPa)'].iloc[-1]:.2f}", 
-                f"{df_combined['Strain (%)'].iloc[-1]:.2f}", 
-                f"{work_j:.4f}"
-            ],
+            "Property": ["Young's Modulus (E)", "Yield Stress", "Yield Strain", "Stress @ Break", "Strain @ Break", "Work Done"],
+            "Value": [f"{E:.2f}", f"{y_stress:.2f}", f"{y_strain:.2f}", f"{df_combined['Stress (MPa)'].iloc[-1]:.2f}", f"{df_combined['Strain (%)'].iloc[-1]:.2f}", f"{work_j:.4f}"],
             "Unit": ["MPa", "MPa", "%", "MPa", "%", "J"]
         }
         df_summary = pd.DataFrame(summary_data)
 
-        # 2. Write both DataFrames to one Excel file with two sheets
+        # 2. Save the current Matplotlib figure to a buffer
+        img_data = io.BytesIO()
+        fig.savefig(img_data, format='png', dpi=100)
+        img_data.seek(0)
+
+        # 3. Create Excel file with XlsxWriter engine
         output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            # Sheet 1: The Raw and Extrapolated Data
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Write the main data
             df_combined.to_excel(writer, index=False, sheet_name="Full Dataset")
-            # Sheet 2: The Dashboard Metrics
-            df_summary.to_excel(writer, index=False, sheet_name="Mechanical Properties")
-        
+            
+            # Write the summary table
+            df_summary.to_excel(writer, index=False, sheet_name="Summary Report", startrow=1, startcol=1)
+            
+            # Access the xlsxwriter workbook and worksheet objects
+            workbook  = writer.book
+            worksheet = writer.sheets["Summary Report"]
+            
+            # Insert the plot image into the Summary sheet
+            worksheet.insert_image('F2', 'plot.png', {'image_data': img_data})
+
         st.download_button(
-            label="📥 Download Report", 
+            label="📥 Download Full Report (Data + Graph)", 
             data=output.getvalue(), 
-            file_name="Solomon_Tensile_Report.xlsx",
+            file_name="Solomon_Full_Analysis.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
-        
