@@ -19,7 +19,7 @@ with col_logo:
         st.header("🔬")
 
 with col_text:
-    st.title("Solomon Tensile Suite v1.9")
+    st.title("Solomon Tensile Suite ")
     st.markdown("**Developed by Solomon** 🚀")
 
 st.info("""
@@ -29,7 +29,7 @@ By utilizing advanced linear extrapolation of the drawing plateau, the suite bri
 """)
 # --- Add this to your Sidebar or Header section ---
 st.sidebar.markdown("---")
-st.sidebar.subheader("🔗 Project Link")
+st.sidebar.subheader("🔗 Tensile suite Pro")
 st.sidebar.link_button(
     "Batch analyser App", 
     "https://solomon--tensile-test-batch-analysis-33vrgvcpcctqwxnuez5pci.streamlit.app/",
