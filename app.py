@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import io
 import requests
+import re
 
 # --- 1. Page Configuration ---
 st.set_page_config(page_title="Solomon Tensile Suite", layout="wide")
@@ -65,12 +66,38 @@ apply_noise = st.sidebar.checkbox("Apply Plateau Noise", value=True)
 noise_std = st.sidebar.number_input("Noise Std Dev (N)", value=0.1, step=0.05)
 ref_points = st.sidebar.number_input("Slope Ref Points", value=50, step=5)
 
-# --- 4. File Uploader ---
-uploaded_file = st.file_uploader("Upload Tensile Data (Excel or CSV)", type=['csv', 'xlsx', 'xls'])
+# --- 4. File Uploader (Updated to allow .txt) ---
+uploaded_file = st.file_uploader("Upload Tensile Data (Excel, CSV or TXT)", type=['csv', 'xlsx', 'xls', 'txt'])
 
 if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
-    cols = df.columns.tolist()
+    # Logic to handle .txt and different delimiters
+    if uploaded_file.name.endswith('.xlsx') or uploaded_file.name.endswith('.xls'):
+        df = pd.read_excel(uploaded_file)
+    else:
+        # Read content to detect formatting
+        raw_bytes = uploaded_file.getvalue()
+        content = raw_bytes.decode("utf-8", errors="ignore")
+        lines = content.splitlines()
+        
+        # Determine starting row by searching for data patterns
+        start_row = 0
+        for i, line in enumerate(lines):
+            if len(re.findall(r"[-+]?\d*\.\d+|\d+", line)) >= 2:
+                start_row = i
+                break
+        
+        # Detect separator (Check for Tab first, then Comma)
+        sep = '\t' if '\t' in lines[start_row] else (',' if ',' in lines[start_row] else r'\s+')
+        
+        df = pd.read_csv(
+            io.StringIO("\n".join(lines[start_row:])), 
+            sep=sep, 
+            engine='python', 
+            on_bad_lines='skip'
+        )
+        
+    cols = [str(c).strip() for c in df.columns.tolist()]
+    df.columns = cols # Ensure cleaned column names
     
     c_a, c_b = st.columns(2)
     with c_a:
@@ -79,6 +106,11 @@ if uploaded_file is not None:
         def_col = st.selectbox("Deformation Column (mm)", cols, index=1 if len(cols)>1 else 0)
 
     if st.button("Calculate & Generate Analysis"):
+        # Ensure numeric data
+        df[force_col] = pd.to_numeric(df[force_col], errors='coerce')
+        df[def_col] = pd.to_numeric(df[def_col], errors='coerce')
+        df = df.dropna(subset=[force_col, def_col])
+
         # --- CALCULATION LOGIC ---
         last_n = df.tail(ref_points)
         slope, intercept = np.polyfit(last_n[def_col].values, last_n[force_col].values, 1)
