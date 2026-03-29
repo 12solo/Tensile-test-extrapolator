@@ -132,88 +132,91 @@ if uploaded_file is not None:
         df_combined['Stress (MPa)'] = df_combined['Force (N)'] / area
         df_combined['Strain (%)'] = (df_combined['Deformation (mm)'] / gauge_length) * 100
         
-        # --- CONSTITUTIVE CALCULATIONS ---
+        # --- CONSTITUTIVE CALCULATIONS WITH SAFETY CHECK ---
         mask_ym = (df_combined['Strain (%)'] >= ym_start) & (df_combined['Strain (%)'] <= ym_end)
-        E, inter_ym = np.polyfit(df_combined.loc[mask_ym, 'Deformation (mm)']/gauge_length, df_combined.loc[mask_ym, 'Stress (MPa)'], 1)
         
-        y_mask = df_combined['Strain (%)'] <= yield_search_max
-        y_idx = df_combined.loc[y_mask, 'Stress (MPa)'].idxmax()
-        y_stress, y_strain = df_combined.loc[y_idx, 'Stress (MPa)'], df_combined.loc[y_idx, 'Strain (%)']
+        # FIXED: Check if the mask contains any data points
+        if mask_ym.any():
+            E, inter_ym = np.polyfit(df_combined.loc[mask_ym, 'Deformation (mm)']/gauge_length, df_combined.loc[mask_ym, 'Stress (MPa)'], 1)
+            
+            y_mask = df_combined['Strain (%)'] <= yield_search_max
+            y_idx = df_combined.loc[y_mask, 'Stress (MPa)'].idxmax()
+            y_stress, y_strain = df_combined.loc[y_idx, 'Stress (MPa)'], df_combined.loc[y_idx, 'Strain (%)']
 
-        try: work_j = np.trapezoid(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
-        except: work_j = np.trapz(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
+            try: work_j = np.trapezoid(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
+            except: work_j = np.trapz(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
 
-        # --- DASHBOARD METRICS ---
-        st.success(f"Analysis for {batch_id} Complete!")
-        m1, m2, m3, m4, m5, m6 = st.columns(6)
-        m1.metric("Modulus (E)", f"{E:.1f} MPa")
-        m2.metric("Yield Stress", f"{y_stress:.2f} MPa")
-        m3.metric("Yield Strain", f"{y_strain:.2f} %")
-        m4.metric("Stress @ Peak", f"{df_combined['Stress (MPa)'].iloc[idx_max]:.2f} MPa")
-        m5.metric("Strain @ Break", f"{df_combined['Strain (%)'].iloc[-1]:.1f} %")
-        m6.metric("Work Done", f"{work_j:.2f} J")
+            # --- DASHBOARD METRICS ---
+            st.success(f"Analysis for {batch_id} Complete!")
+            m1, m2, m3, m4, m5, m6 = st.columns(6)
+            m1.metric("Modulus (E)", f"{E:.1f} MPa")
+            m2.metric("Yield Stress", f"{y_stress:.2f} MPa")
+            m3.metric("Yield Strain", f"{y_strain:.2f} %")
+            m4.metric("Stress @ Peak", f"{df_combined['Stress (MPa)'].iloc[idx_max]:.2f} MPa")
+            m5.metric("Strain @ Break", f"{df_combined['Strain (%)'].iloc[-1]:.1f} %")
+            m6.metric("Work Done", f"{work_j:.2f} J")
 
-        # --- PLOTTING ---
-        fig, ax = plt.subplots(figsize=(10, 6))
+            # --- PLOTTING ---
+            fig, ax = plt.subplots(figsize=(10, 6))
+            ax.plot(df_combined.loc[df_combined['Type']=='Original', 'Strain (%)'], 
+                    df_combined.loc[df_combined['Type']=='Original', 'Stress (MPa)'], 
+                    label='Original (to Peak)', color='blue', lw=2)
+            ax.plot(df_combined.loc[df_combined['Type']=='Extrapolated', 'Strain (%)'], 
+                    df_combined.loc[df_combined['Type']=='Extrapolated', 'Stress (MPa)'], 
+                    label='Extrapolated Plateau', color='red', ls='--', alpha=0.7)
+            
+            xfv = np.linspace(0, ym_end/100 * 1.5, 50)
+            yfv = E * xfv + inter_ym
+            ax.plot(xfv * 100, yfv, color='green', ls=':', label='Elastic Fit')
+            
+            peak_strain = df_combined['Strain (%)'].iloc[idx_max]
+            peak_stress = df_combined['Stress (MPa)'].iloc[idx_max]
+            ax.plot(peak_strain, peak_stress, '*', color='gold', markersize=15, label='Max Stress', zorder=5)
+            ax.axvline(x=peak_strain, color='gray', linestyle='--', alpha=0.5, lw=1)
+            
+            if calc_yield: ax.plot(y_strain, y_stress, 'o', color='orange', label='Yield Point')
+            
+            ax.set_xlabel('Strain (%)'); ax.set_ylabel('Stress (MPa)'); ax.legend(loc='lower right'); ax.grid(True, alpha=0.3)
+            
+            # Inset Zoom
+            axins = ax.inset_axes([inset_x, inset_y, inset_w, inset_h])
+            axins.plot(df_combined['Strain (%)'].iloc[:len(df_orig)], df_combined['Stress (MPa)'].iloc[:len(df_orig)], color='blue')
+            axins.plot(xfv * 100, yfv, color='green', ls=':')
+            z_lim = max(ym_end + 1.5, y_strain + 1.5 if calc_yield else 0)
+            axins.set_xlim(0, z_lim); axins.set_ylim(0, df_combined.loc[df_combined['Strain (%)'] <= z_lim, 'Stress (MPa)'].max() * 1.3)
+            ax.indicate_inset_zoom(axins, edgecolor="black")
+            st.pyplot(fig)
+
+            # --- EXPORT ---
+            summary_data = {
+                "Property": ["Project", "Batch", "Modulus (E)", "Yield Stress", "Yield Strain", "Peak Stress", "Strain @ Break", "Work Done"],
+                "Value": [project_name, batch_id, f"{E:.2f}", f"{y_stress:.2f}", f"{y_strain:.2f}", f"{peak_stress:.2f}", f"{df_combined['Strain (%)'].iloc[-1]:.2f}", f"{work_j:.4f}"],
+                "Unit": ["-", "-", "MPa", "MPa", "%", "MPa", "%", "J"]
+            }
+            df_summary = pd.DataFrame(summary_data)
+
+            img_data = io.BytesIO()
+            fig.savefig(img_data, format='png', dpi=100)
+            img_data.seek(0)
+
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                df_combined.to_excel(writer, index=False, sheet_name="Full Dataset")
+                workbook = writer.book
+                worksheet = workbook.add_worksheet("Summary Report")
+                df_summary.to_excel(writer, index=False, sheet_name="Summary Report", startrow=1, startcol=1)
+                worksheet.insert_image('F2', 'plot.png', {'image_data': img_data, 'x_scale': 0.7, 'y_scale': 0.7})
+
+            st.download_button(
+                label=f"📥 Download Report for {batch_id}", 
+                data=output.getvalue(), 
+                file_name=f"{batch_id}_Tensile_Report.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+
+            st.subheader("📋 Data Preview Table")
+            st.dataframe(df_combined[['Strain (%)', 'Stress (MPa)', 'Force (N)', 'Type']], height=300)
         
-        # Plot Data
-        ax.plot(df_combined.loc[df_combined['Type']=='Original', 'Strain (%)'], 
-                df_combined.loc[df_combined['Type']=='Original', 'Stress (MPa)'], 
-                label='Original (to Peak)', color='blue', lw=2)
-        ax.plot(df_combined.loc[df_combined['Type']=='Extrapolated', 'Strain (%)'], 
-                df_combined.loc[df_combined['Type']=='Extrapolated', 'Stress (MPa)'], 
-                label='Extrapolated Plateau', color='red', ls='--', alpha=0.7)
-        
-        # Elastic Fit
-        xfv = np.linspace(0, ym_end/100 * 1.5, 50)
-        yfv = E * xfv + inter_ym
-        ax.plot(xfv * 100, yfv, color='green', ls=':', label='Elastic Fit')
-        
-        # Peak Stress Marker & Reference Line
-        peak_strain = df_combined['Strain (%)'].iloc[idx_max]
-        peak_stress = df_combined['Stress (MPa)'].iloc[idx_max]
-        ax.plot(peak_strain, peak_stress, '*', color='gold', markersize=15, label='Max Stress', zorder=5)
-        ax.axvline(x=peak_strain, color='gray', linestyle='--', alpha=0.5, lw=1)
-        
-        if calc_yield: ax.plot(y_strain, y_stress, 'o', color='orange', label='Yield Point')
-        
-        ax.set_xlabel('Strain (%)'); ax.set_ylabel('Stress (MPa)'); ax.legend(loc='lower right'); ax.grid(True, alpha=0.3)
-        
-        # Inset Zoom
-        axins = ax.inset_axes([inset_x, inset_y, inset_w, inset_h])
-        axins.plot(df_combined['Strain (%)'].iloc[:len(df_orig)], df_combined['Stress (MPa)'].iloc[:len(df_orig)], color='blue')
-        axins.plot(xfv * 100, yfv, color='green', ls=':')
-        z_lim = max(ym_end + 1.5, y_strain + 1.5 if calc_yield else 0)
-        axins.set_xlim(0, z_lim); axins.set_ylim(0, df_combined.loc[df_combined['Strain (%)'] <= z_lim, 'Stress (MPa)'].max() * 1.3)
-        ax.indicate_inset_zoom(axins, edgecolor="black")
-        st.pyplot(fig)
-
-        # --- EXPORT ---
-        summary_data = {
-            "Property": ["Project", "Batch", "Modulus (E)", "Yield Stress", "Yield Strain", "Peak Stress", "Strain @ Break", "Work Done"],
-            "Value": [project_name, batch_id, f"{E:.2f}", f"{y_stress:.2f}", f"{y_strain:.2f}", f"{peak_stress:.2f}", f"{df_combined['Strain (%)'].iloc[-1]:.2f}", f"{work_j:.4f}"],
-            "Unit": ["-", "-", "MPa", "MPa", "%", "MPa", "%", "J"]
-        }
-        df_summary = pd.DataFrame(summary_data)
-
-        img_data = io.BytesIO()
-        fig.savefig(img_data, format='png', dpi=100)
-        img_data.seek(0)
-
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df_combined.to_excel(writer, index=False, sheet_name="Full Dataset")
-            workbook = writer.book
-            worksheet = workbook.add_worksheet("Summary Report")
-            df_summary.to_excel(writer, index=False, sheet_name="Summary Report", startrow=1, startcol=1)
-            worksheet.insert_image('F2', 'plot.png', {'image_data': img_data, 'x_scale': 0.7, 'y_scale': 0.7})
-
-        st.download_button(
-            label=f"📥 Download Report for {batch_id}", 
-            data=output.getvalue(), 
-            file_name=f"{batch_id}_Tensile_Report.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-
-        st.subheader("📋 Data Preview Table")
-        st.dataframe(df_combined[['Strain (%)', 'Stress (MPa)', 'Force (N)', 'Type']], height=300)
+        else:
+            # ERROR HANDLING: This prints if the Modulus Fit Range is empty
+            st.error(f"⚠️ **Range Error:** No data points found between {ym_start}% and {ym_end}% strain. Please check your Gauge Length or expand the Modulus Elongation range in the sidebar.")
