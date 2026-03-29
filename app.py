@@ -27,7 +27,15 @@ The Solomon Tensile Suite is a high-fidelity analytical framework engineered for
 While optimized for biodegradable polymers—specifically PBAT and PBAT/PLA blends—it provides a robust solution for the "premature termination" problem common in high-elongation testing. 
 By utilizing advanced linear extrapolation of the drawing plateau, the suite bridges the gap between empirical laboratory data and theoretical failure points, ensuring a comprehensive characterization of mechanical performance
 """)
-
+# --- Add this to your Sidebar or Header section ---
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔗 Project Link")
+st.sidebar.link_button(
+    "Open Live App", 
+    "https://solomon--tensile-test-batch-analysis-33vrgvcpcctqwxnuez5pci.streamlit.app/",
+    use_container_width=True,
+    help="Click to visit the deployed version of the Solomon Tensile Suite."
+)
 # --- 3. Sidebar Parameters ---
 st.sidebar.header("📂 Project Metadata")
 project_name = st.sidebar.text_input("Project Name / Research Topic", "PBAT/PLA")
