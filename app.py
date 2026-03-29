@@ -4,7 +4,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import io
 import requests
-import re
 
 # --- 1. Page Configuration ---
 st.set_page_config(page_title="Solomon Tensile Suite", layout="wide")
@@ -28,8 +27,7 @@ The Solomon Tensile Suite is a high-fidelity analytical framework engineered for
 While optimized for biodegradable polymers—specifically PBAT and PBAT/PLA blends—it provides a robust solution for the "premature termination" problem common in high-elongation testing. 
 By utilizing advanced linear extrapolation of the drawing plateau, the suite bridges the gap between empirical laboratory data and theoretical failure points, ensuring a comprehensive characterization of mechanical performance
 """)
-
-# --- Sidebar Link ---
+# --- Add this to your Sidebar or Header section ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔗 Tensile suite Pro")
 st.sidebar.link_button(
@@ -38,7 +36,6 @@ st.sidebar.link_button(
     use_container_width=True,
     help="Click to visit the deployed version of the Solomon Tensile Suite."
 )
-
 # --- 3. Sidebar Parameters ---
 st.sidebar.header("📂 Project Metadata")
 project_name = st.sidebar.text_input("Project Name / Research Topic", "PBAT/PLA")
@@ -68,55 +65,21 @@ apply_noise = st.sidebar.checkbox("Apply Plateau Noise", value=True)
 noise_std = st.sidebar.number_input("Noise Std Dev (N)", value=0.1, step=0.05)
 ref_points = st.sidebar.number_input("Slope Ref Points", value=50, step=5)
 
-# --- 4. File Uploader & Robust Loader ---
-uploaded_file = st.file_uploader("Upload Tensile Data (Excel, CSV, or TXT)", type=['csv', 'xlsx', 'xls', 'txt'])
-
-def robust_load(file):
-    ext = file.name.split('.')[-1].lower()
-    if ext in ['xlsx', 'xls']:
-        return pd.read_excel(file)
-    
-    # For CSV and TXT: handle potential headers or metadata lines
-    raw_bytes = file.getvalue()
-    content = raw_bytes.decode("utf-8", errors="ignore")
-    lines = content.splitlines()
-    
-    # Find the first row that actually looks like data
-    start_row = 0
-    for i, line in enumerate(lines):
-        if len(re.findall(r"[-+]?\d*\.\d+|\d+", line)) >= 2:
-            start_row = i
-            break
-    
-    # Detect separator (tab for TXT usually, comma for CSV)
-    sep = '\t' if '\t' in lines[start_row] else (',' if ',' in lines[start_row] else r'\s+')
-    
-    df = pd.read_csv(
-        io.StringIO("\n".join(lines[start_row:])), 
-        sep=sep, 
-        engine='python', 
-        on_bad_lines='skip'
-    )
-    # Clean column names
-    df.columns = [str(c).strip() for c in df.columns]
-    return df
+# --- 4. File Uploader ---
+uploaded_file = st.file_uploader("Upload Tensile Data (Excel or CSV)", type=['csv', 'xlsx', 'xls'])
 
 if uploaded_file is not None:
-    df = robust_load(uploaded_file)
+    df = pd.read_csv(uploaded_file) if uploaded_file.name.endswith('.csv') else pd.read_excel(uploaded_file)
     cols = df.columns.tolist()
     
     c_a, c_b = st.columns(2)
     with c_a:
-        force_col = st.selectbox("Force Column", cols, index=0)
+        force_col = st.selectbox("Force Column (N)", cols, index=0)
     with c_b:
-        def_col = st.selectbox("Deformation Column", cols, index=1 if len(cols)>1 else 0)
+        def_col = st.selectbox("Deformation Column (mm)", cols, index=1 if len(cols)>1 else 0)
 
     if st.button("Calculate & Generate Analysis"):
         # --- CALCULATION LOGIC ---
-        df[force_col] = pd.to_numeric(df[force_col], errors='coerce')
-        df[def_col] = pd.to_numeric(df[def_col], errors='coerce')
-        df = df.dropna(subset=[force_col, def_col])
-
         last_n = df.tail(ref_points)
         slope, intercept = np.polyfit(last_n[def_col].values, last_n[force_col].values, 1)
         D_stop, L_stop = df[def_col].iloc[-1], df[force_col].iloc[-1]
@@ -177,7 +140,7 @@ if uploaded_file is not None:
         ax.indicate_inset_zoom(axins, edgecolor="black")
         st.pyplot(fig)
 
-        # --- EXPORT SECTION ---
+        # --- ADVANCED EXPORT SECTION ---
         summary_data = {
             "Property": ["Project Name", "Batch ID", "Young's Modulus (E)", "Yield Stress", "Yield Strain", "Stress @ Break", "Strain @ Break", "Work Done"],
             "Value": [project_name, batch_id, f"{E:.2f}", f"{y_stress:.2f}", f"{y_strain:.2f}", f"{df_combined['Stress (MPa)'].iloc[-1]:.2f}", f"{df_combined['Strain (%)'].iloc[-1]:.2f}", f"{work_j:.4f}"],
@@ -185,10 +148,12 @@ if uploaded_file is not None:
         }
         df_summary = pd.DataFrame(summary_data)
 
+        # Capture Graph
         img_data = io.BytesIO()
         fig.savefig(img_data, format='png', dpi=100)
         img_data.seek(0)
 
+        # Capture Logo
         logo_data = io.BytesIO()
         try:
             r = requests.get(logo_url)
@@ -204,12 +169,17 @@ if uploaded_file is not None:
                 worksheet = workbook.add_worksheet("Summary Report")
                 writer.sheets["Summary Report"] = worksheet
                 
+                # Branding
                 if has_logo:
                     worksheet.insert_image('B1', 'logo.png', {'image_data': logo_data, 'x_scale': 0.05, 'y_scale': 0.05})
                 
                 header_fmt = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
                 worksheet.merge_range('B5:D5', 'Mechanical Analysis Summary', header_fmt)
+                
+                # Write Summary starting Row 6
                 df_summary.to_excel(writer, index=False, sheet_name="Summary Report", startrow=5, startcol=1)
+                
+                # Insert Plot
                 worksheet.insert_image('F6', 'plot.png', {'image_data': img_data, 'x_scale': 0.8, 'y_scale': 0.8})
 
             st.download_button(
@@ -219,7 +189,8 @@ if uploaded_file is not None:
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
         except Exception as e:
-            st.error(f"Export Error: {e}")
+            st.error(f"Excel Export Error: Ensure 'xlsxwriter' is in requirements.txt. Details: {e}")
 
+        # Table Preview
         st.subheader("📋 Data Preview Table")
         st.dataframe(df_combined[['Strain (%)', 'Stress (MPa)', 'Force (N)', 'Type']], height=300)
