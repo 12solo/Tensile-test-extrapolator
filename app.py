@@ -31,7 +31,7 @@ By utilizing advanced linear extrapolation of the drawing plateau, the suite bri
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔗 Project Link")
 st.sidebar.link_button(
-    "Open Live App", 
+    "Batch analyser App", 
     "https://solomon--tensile-test-batch-analysis-33vrgvcpcctqwxnuez5pci.streamlit.app/",
     use_container_width=True,
     help="Click to visit the deployed version of the Solomon Tensile Suite."
