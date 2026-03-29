@@ -20,23 +20,23 @@ with col_logo:
         st.header("🔬")
 
 with col_text:
-    st.title("Solomon Tensile Suite ")
+    st.title("Solomon Tensile Suite")
     st.markdown("**Developed by Solomon** 🚀")
 
 st.info("""
 The Solomon Tensile Suite is a high-fidelity analytical framework engineered for Material Scientists and Mechanical Engineers. 
-While optimized for biodegradable polymers—specifically PBAT and PBAT/PLA blends—it provides a robust solution for the "premature termination" problem common in high-elongation testing. 
-By utilizing advanced linear extrapolation of the drawing plateau, the suite bridges the gap between empirical laboratory data and theoretical failure points, ensuring a comprehensive characterization of mechanical performance
+Optimized for biodegradable polymers (PBAT/PLA), it automatically detects the maximum stress point and extrapolates the drawing plateau to characterize mechanical performance even in cases of premature test termination.
 """)
-# --- Add this to your Sidebar or Header section ---
+
+# --- Sidebar Link ---
 st.sidebar.markdown("---")
 st.sidebar.subheader("🔗 Tensile suite Pro")
 st.sidebar.link_button(
     "Batch analyser App", 
     "https://solomon--tensile-test-batch-analysis-33vrgvcpcctqwxnuez5pci.streamlit.app/",
-    use_container_width=True,
-    help="Click to visit the deployed version of the Solomon Tensile Suite."
+    use_container_width=True
 )
+
 # --- 3. Sidebar Parameters ---
 st.sidebar.header("📂 Project Metadata")
 project_name = st.sidebar.text_input("Project Name / Research Topic", "PBAT/PLA")
@@ -66,56 +66,56 @@ apply_noise = st.sidebar.checkbox("Apply Plateau Noise", value=True)
 noise_std = st.sidebar.number_input("Noise Std Dev (N)", value=0.1, step=0.05)
 ref_points = st.sidebar.number_input("Slope Ref Points", value=50, step=5)
 
-# --- 4. File Uploader (Updated to allow .txt) ---
-uploaded_file = st.file_uploader("Upload Tensile Data (Excel, CSV or TXT)", type=['csv', 'xlsx', 'xls', 'txt'])
+# --- 4. Robust File Uploader ---
+uploaded_file = st.file_uploader("Upload Tensile Data (Excel, CSV, or TXT)", type=['csv', 'xlsx', 'xls', 'txt'])
+
+def robust_load(file):
+    ext = file.name.split('.')[-1].lower()
+    if ext in ['xlsx', 'xls']:
+        return pd.read_excel(file)
+    
+    raw_bytes = file.getvalue()
+    content = raw_bytes.decode("utf-8", errors="ignore")
+    lines = content.splitlines()
+    
+    start_row = 0
+    for i, line in enumerate(lines):
+        if len(re.findall(r"[-+]?\d*\.\d+|\d+", line)) >= 2:
+            start_row = i
+            break
+    
+    sep = '\t' if '\t' in lines[start_row] else (',' if ',' in lines[start_row] else r'\s+')
+    df = pd.read_csv(io.StringIO("\n".join(lines[start_row:])), sep=sep, engine='python', on_bad_lines='skip')
+    df.columns = [str(c).strip() for c in df.columns]
+    return df
 
 if uploaded_file is not None:
-    # Logic to handle .txt and different delimiters
-    if uploaded_file.name.endswith('.xlsx') or uploaded_file.name.endswith('.xls'):
-        df = pd.read_excel(uploaded_file)
-    else:
-        # Read content to detect formatting
-        raw_bytes = uploaded_file.getvalue()
-        content = raw_bytes.decode("utf-8", errors="ignore")
-        lines = content.splitlines()
-        
-        # Determine starting row by searching for data patterns
-        start_row = 0
-        for i, line in enumerate(lines):
-            if len(re.findall(r"[-+]?\d*\.\d+|\d+", line)) >= 2:
-                start_row = i
-                break
-        
-        # Detect separator (Check for Tab first, then Comma)
-        sep = '\t' if '\t' in lines[start_row] else (',' if ',' in lines[start_row] else r'\s+')
-        
-        df = pd.read_csv(
-            io.StringIO("\n".join(lines[start_row:])), 
-            sep=sep, 
-            engine='python', 
-            on_bad_lines='skip'
-        )
-        
-    cols = [str(c).strip() for c in df.columns.tolist()]
-    df.columns = cols # Ensure cleaned column names
+    df = robust_load(uploaded_file)
+    cols = df.columns.tolist()
     
     c_a, c_b = st.columns(2)
     with c_a:
-        force_col = st.selectbox("Force Column (N)", cols, index=0)
+        force_col = st.selectbox("Force/Load Column", cols, index=0)
     with c_b:
-        def_col = st.selectbox("Deformation Column (mm)", cols, index=1 if len(cols)>1 else 0)
+        def_col = st.selectbox("Deformation/Extension Column", cols, index=1 if len(cols)>1 else 0)
 
     if st.button("Calculate & Generate Analysis"):
-        # Ensure numeric data
+        # --- PRE-PROCESSING ---
         df[force_col] = pd.to_numeric(df[force_col], errors='coerce')
         df[def_col] = pd.to_numeric(df[def_col], errors='coerce')
         df = df.dropna(subset=[force_col, def_col])
 
-        # --- CALCULATION LOGIC ---
-        last_n = df.tail(ref_points)
+        # --- AUTO-DETECTION OF PEAK STRESS ---
+        idx_max = df[force_col].idxmax()
+        df_trimmed = df.loc[:idx_max].copy()
+
+        # --- EXTRAPOLATION LOGIC ---
+        last_n = df_trimmed.tail(ref_points)
         slope, intercept = np.polyfit(last_n[def_col].values, last_n[force_col].values, 1)
-        D_stop, L_stop = df[def_col].iloc[-1], df[force_col].iloc[-1]
-        avg_step = np.mean(np.diff(df[def_col].tail(10).values))
+        
+        D_stop = df_trimmed[def_col].iloc[-1] 
+        L_stop = df_trimmed[force_col].iloc[-1]
+        avg_step = np.mean(np.diff(df_trimmed[def_col].tail(10).values))
         
         D_new = np.arange(D_stop + avg_step, target_def + avg_step, avg_step)
         if len(D_new) > 0 and D_new[-1] > target_def: D_new[-1] = target_def
@@ -124,43 +124,59 @@ if uploaded_file is not None:
         noise = np.random.normal(0, noise_std, len(D_new)) if apply_noise else 0
         L_new = L_stop + slope * (D_new - D_stop) + noise
         
-        df_orig = pd.DataFrame({'Force (N)': df[force_col], 'Deformation (mm)': df[def_col], 'Type': 'Original'})
+        # Combine Data
+        df_orig = pd.DataFrame({'Force (N)': df_trimmed[force_col], 'Deformation (mm)': df_trimmed[def_col], 'Type': 'Original'})
         df_ext = pd.DataFrame({'Force (N)': L_new, 'Deformation (mm)': D_new, 'Type': 'Extrapolated'})
         df_combined = pd.concat([df_orig, df_ext], ignore_index=True)
+        
         df_combined['Stress (MPa)'] = df_combined['Force (N)'] / area
         df_combined['Strain (%)'] = (df_combined['Deformation (mm)'] / gauge_length) * 100
         
-        # Modulus Fit
+        # --- CONSTITUTIVE CALCULATIONS ---
         mask_ym = (df_combined['Strain (%)'] >= ym_start) & (df_combined['Strain (%)'] <= ym_end)
         E, inter_ym = np.polyfit(df_combined.loc[mask_ym, 'Deformation (mm)']/gauge_length, df_combined.loc[mask_ym, 'Stress (MPa)'], 1)
         
-        # Yield Point
         y_mask = df_combined['Strain (%)'] <= yield_search_max
         y_idx = df_combined.loc[y_mask, 'Stress (MPa)'].idxmax()
         y_stress, y_strain = df_combined.loc[y_idx, 'Stress (MPa)'], df_combined.loc[y_idx, 'Strain (%)']
 
-        # Energy
         try: work_j = np.trapezoid(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
         except: work_j = np.trapz(df_combined['Force (N)'], df_combined['Deformation (mm)']) / 1000.0
 
-        # --- DASHBOARD ---
+        # --- DASHBOARD METRICS ---
         st.success(f"Analysis for {batch_id} Complete!")
         m1, m2, m3, m4, m5, m6 = st.columns(6)
         m1.metric("Modulus (E)", f"{E:.1f} MPa")
         m2.metric("Yield Stress", f"{y_stress:.2f} MPa")
         m3.metric("Yield Strain", f"{y_strain:.2f} %")
-        m4.metric("Stress @ Break", f"{df_combined['Stress (MPa)'].iloc[-1]:.2f} MPa")
+        m4.metric("Stress @ Peak", f"{df_combined['Stress (MPa)'].iloc[idx_max]:.2f} MPa")
         m5.metric("Strain @ Break", f"{df_combined['Strain (%)'].iloc[-1]:.1f} %")
         m6.metric("Work Done", f"{work_j:.2f} J")
 
         # --- PLOTTING ---
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.plot(df_combined.loc[df_combined['Type']=='Original', 'Strain (%)'], df_combined.loc[df_combined['Type']=='Original', 'Stress (MPa)'], label='Original', color='blue', lw=2)
-        ax.plot(df_combined.loc[df_combined['Type']=='Extrapolated', 'Strain (%)'], df_combined.loc[df_combined['Type']=='Extrapolated', 'Stress (MPa)'], label='Extrapolated', color='red', ls='--', alpha=0.7)
+        
+        # Plot Data
+        ax.plot(df_combined.loc[df_combined['Type']=='Original', 'Strain (%)'], 
+                df_combined.loc[df_combined['Type']=='Original', 'Stress (MPa)'], 
+                label='Original (to Peak)', color='blue', lw=2)
+        ax.plot(df_combined.loc[df_combined['Type']=='Extrapolated', 'Strain (%)'], 
+                df_combined.loc[df_combined['Type']=='Extrapolated', 'Stress (MPa)'], 
+                label='Extrapolated Plateau', color='red', ls='--', alpha=0.7)
+        
+        # Elastic Fit
         xfv = np.linspace(0, ym_end/100 * 1.5, 50)
         yfv = E * xfv + inter_ym
         ax.plot(xfv * 100, yfv, color='green', ls=':', label='Elastic Fit')
+        
+        # Peak Stress Marker & Reference Line
+        peak_strain = df_combined['Strain (%)'].iloc[idx_max]
+        peak_stress = df_combined['Stress (MPa)'].iloc[idx_max]
+        ax.plot(peak_strain, peak_stress, '*', color='gold', markersize=15, label='Max Stress', zorder=5)
+        ax.axvline(x=peak_strain, color='gray', linestyle='--', alpha=0.5, lw=1)
+        
         if calc_yield: ax.plot(y_strain, y_stress, 'o', color='orange', label='Yield Point')
+        
         ax.set_xlabel('Strain (%)'); ax.set_ylabel('Stress (MPa)'); ax.legend(loc='lower right'); ax.grid(True, alpha=0.3)
         
         # Inset Zoom
@@ -172,57 +188,32 @@ if uploaded_file is not None:
         ax.indicate_inset_zoom(axins, edgecolor="black")
         st.pyplot(fig)
 
-        # --- ADVANCED EXPORT SECTION ---
+        # --- EXPORT ---
         summary_data = {
-            "Property": ["Project Name", "Batch ID", "Young's Modulus (E)", "Yield Stress", "Yield Strain", "Stress @ Break", "Strain @ Break", "Work Done"],
-            "Value": [project_name, batch_id, f"{E:.2f}", f"{y_stress:.2f}", f"{y_strain:.2f}", f"{df_combined['Stress (MPa)'].iloc[-1]:.2f}", f"{df_combined['Strain (%)'].iloc[-1]:.2f}", f"{work_j:.4f}"],
+            "Property": ["Project", "Batch", "Modulus (E)", "Yield Stress", "Yield Strain", "Peak Stress", "Strain @ Break", "Work Done"],
+            "Value": [project_name, batch_id, f"{E:.2f}", f"{y_stress:.2f}", f"{y_strain:.2f}", f"{peak_stress:.2f}", f"{df_combined['Strain (%)'].iloc[-1]:.2f}", f"{work_j:.4f}"],
             "Unit": ["-", "-", "MPa", "MPa", "%", "MPa", "%", "J"]
         }
         df_summary = pd.DataFrame(summary_data)
 
-        # Capture Graph
         img_data = io.BytesIO()
         fig.savefig(img_data, format='png', dpi=100)
         img_data.seek(0)
 
-        # Capture Logo
-        logo_data = io.BytesIO()
-        try:
-            r = requests.get(logo_url)
-            logo_data.write(r.content); logo_data.seek(0)
-            has_logo = True
-        except: has_logo = False
-
         output = io.BytesIO()
-        try:
-            with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                df_combined.to_excel(writer, index=False, sheet_name="Full Dataset")
-                workbook  = writer.book
-                worksheet = workbook.add_worksheet("Summary Report")
-                writer.sheets["Summary Report"] = worksheet
-                
-                # Branding
-                if has_logo:
-                    worksheet.insert_image('B1', 'logo.png', {'image_data': logo_data, 'x_scale': 0.05, 'y_scale': 0.05})
-                
-                header_fmt = workbook.add_format({'bold': 1, 'border': 1, 'align': 'center', 'valign': 'vcenter', 'fg_color': '#D7E4BC'})
-                worksheet.merge_range('B5:D5', 'Mechanical Analysis Summary', header_fmt)
-                
-                # Write Summary starting Row 6
-                df_summary.to_excel(writer, index=False, sheet_name="Summary Report", startrow=5, startcol=1)
-                
-                # Insert Plot
-                worksheet.insert_image('F6', 'plot.png', {'image_data': img_data, 'x_scale': 0.8, 'y_scale': 0.8})
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df_combined.to_excel(writer, index=False, sheet_name="Full Dataset")
+            workbook = writer.book
+            worksheet = workbook.add_worksheet("Summary Report")
+            df_summary.to_excel(writer, index=False, sheet_name="Summary Report", startrow=1, startcol=1)
+            worksheet.insert_image('F2', 'plot.png', {'image_data': img_data, 'x_scale': 0.7, 'y_scale': 0.7})
 
-            st.download_button(
-                label=f"📥 Download Report for {batch_id}", 
-                data=output.getvalue(), 
-                file_name=f"{batch_id}_Tensile_Report.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-        except Exception as e:
-            st.error(f"Excel Export Error: Ensure 'xlsxwriter' is in requirements.txt. Details: {e}")
+        st.download_button(
+            label=f"📥 Download Report for {batch_id}", 
+            data=output.getvalue(), 
+            file_name=f"{batch_id}_Tensile_Report.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
-        # Table Preview
         st.subheader("📋 Data Preview Table")
         st.dataframe(df_combined[['Strain (%)', 'Stress (MPa)', 'Force (N)', 'Type']], height=300)
