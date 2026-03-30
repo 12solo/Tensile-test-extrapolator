@@ -135,7 +135,6 @@ if uploaded_file is not None:
         # --- CONSTITUTIVE CALCULATIONS WITH SAFETY CHECK ---
         mask_ym = (df_combined['Strain (%)'] >= ym_start) & (df_combined['Strain (%)'] <= ym_end)
         
-        # FIXED: Check if the mask contains any data points
         if mask_ym.any():
             E, inter_ym = np.polyfit(df_combined.loc[mask_ym, 'Deformation (mm)']/gauge_length, df_combined.loc[mask_ym, 'Stress (MPa)'], 1)
             
@@ -156,34 +155,49 @@ if uploaded_file is not None:
             m5.metric("Strain @ Break", f"{df_combined['Strain (%)'].iloc[-1]:.1f} %")
             m6.metric("Work Done", f"{work_j:.2f} J")
 
-            # --- PLOTTING ---
+            # --- PLOTTING WITH DISTINCT COLORS ---
             fig, ax = plt.subplots(figsize=(10, 6))
+            
+            # 1. Original Data - Deep Blue
             ax.plot(df_combined.loc[df_combined['Type']=='Original', 'Strain (%)'], 
                     df_combined.loc[df_combined['Type']=='Original', 'Stress (MPa)'], 
-                    label='Original (to Peak)', color='blue', lw=2)
+                    label='Original (to Peak)', color='#1f77b4', lw=2.5)
+            
+            # 2. Extrapolated Data - Vibrant Orange (Dashed)
             ax.plot(df_combined.loc[df_combined['Type']=='Extrapolated', 'Strain (%)'], 
                     df_combined.loc[df_combined['Type']=='Extrapolated', 'Stress (MPa)'], 
-                    label='Extrapolated Plateau', color='red', ls='--', alpha=0.7)
+                    label='Extrapolated Plateau', color='#ff7f0e', ls='--', alpha=0.8, lw=2)
             
+            # 3. Elastic Fit - Purple (Dotted)
             xfv = np.linspace(0, ym_end/100 * 1.5, 50)
             yfv = E * xfv + inter_ym
-            ax.plot(xfv * 100, yfv, color='green', ls=':', label='Elastic Fit')
+            ax.plot(xfv * 100, yfv, color='#9467bd', ls=':', label='Elastic Fit', lw=2)
             
+            # 4. Max Stress - Red Star
             peak_strain = df_combined['Strain (%)'].iloc[idx_max]
             peak_stress = df_combined['Stress (MPa)'].iloc[idx_max]
-            ax.plot(peak_strain, peak_stress, '*', color='gold', markersize=15, label='Max Stress', zorder=5)
-            ax.axvline(x=peak_strain, color='gray', linestyle='--', alpha=0.5, lw=1)
+            ax.plot(peak_strain, peak_stress, '*', color='#d62728', markersize=14, label='Max Stress', zorder=5)
+            ax.axvline(x=peak_strain, color='gray', linestyle='--', alpha=0.4, lw=1)
             
-            if calc_yield: ax.plot(y_strain, y_stress, 'o', color='orange', label='Yield Point')
+            # 5. Yield Point - Teal Green Circle
+            if calc_yield: 
+                ax.plot(y_strain, y_stress, 'o', color='#2ca02c', markersize=8, label='Yield Point', markeredgecolor='black', zorder=6)
             
-            ax.set_xlabel('Strain (%)'); ax.set_ylabel('Stress (MPa)'); ax.legend(loc='lower right'); ax.grid(True, alpha=0.3)
+            ax.set_xlabel('Strain (%)', fontweight='bold')
+            ax.set_ylabel('Stress (MPa)', fontweight='bold')
+            ax.legend(loc='lower right', frameon=True, shadow=True)
+            ax.grid(True, linestyle='--', alpha=0.5)
             
-            # Inset Zoom
+            # Inset Zoom with matching colors
             axins = ax.inset_axes([inset_x, inset_y, inset_w, inset_h])
-            axins.plot(df_combined['Strain (%)'].iloc[:len(df_orig)], df_combined['Stress (MPa)'].iloc[:len(df_orig)], color='blue')
-            axins.plot(xfv * 100, yfv, color='green', ls=':')
+            axins.plot(df_combined['Strain (%)'].iloc[:len(df_orig)], df_combined['Stress (MPa)'].iloc[:len(df_orig)], color='#1f77b4')
+            axins.plot(xfv * 100, yfv, color='#9467bd', ls=':')
+            if calc_yield:
+                axins.plot(y_strain, y_stress, 'o', color='#2ca02c', markersize=6, markeredgecolor='black')
+                
             z_lim = max(ym_end + 1.5, y_strain + 1.5 if calc_yield else 0)
-            axins.set_xlim(0, z_lim); axins.set_ylim(0, df_combined.loc[df_combined['Strain (%)'] <= z_lim, 'Stress (MPa)'].max() * 1.3)
+            axins.set_xlim(0, z_lim)
+            axins.set_ylim(0, df_combined.loc[df_combined['Strain (%)'] <= z_lim, 'Stress (MPa)'].max() * 1.3)
             ax.indicate_inset_zoom(axins, edgecolor="black")
             st.pyplot(fig)
 
@@ -218,5 +232,4 @@ if uploaded_file is not None:
             st.dataframe(df_combined[['Strain (%)', 'Stress (MPa)', 'Force (N)', 'Type']], height=300)
         
         else:
-            # ERROR HANDLING: This prints if the Modulus Fit Range is empty
             st.error(f"⚠️ **Range Error:** No data points found between {ym_start}% and {ym_end}% strain. Please check your Gauge Length or expand the Modulus Elongation range in the sidebar.")
