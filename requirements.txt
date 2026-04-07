@@ -1,6 +1,8 @@
-xlsxwriter
+streamlit
 pandas
 numpy
+plotly
 matplotlib
-openpyxl
 scipy
+xlsxwriter
+requests
